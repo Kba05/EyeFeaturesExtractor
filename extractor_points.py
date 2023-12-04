@@ -107,7 +107,7 @@ def run_face_mp(image):
     return ear, puc, image
 
 
-def calibrate(calib_frame_count=25):
+def calibrate(calib_frame_count=50):
     ''' Perform clibration. Get features for the neutral position.
     :param calib_frame_count: Image frames for which calibration is performed. Default Vale of 25.
     :return: Normalization Values for feature 1, Normalization Values for feature 2, \
@@ -205,7 +205,7 @@ def infer(ears_norm, pucs_norm):
 
 
 def add_to_csv(ear, puc):
-    fieldnames = ['EAR', 'PUC', 'Time']
+    fieldnames = ['EAR', 'PUC', 'TIME']
     filename = 'data.csv'
 
     with open(filename, mode='a', newline='') as file:
@@ -214,8 +214,33 @@ def add_to_csv(ear, puc):
         if file.tell() == 0:
             writer.writeheader()
 
-        writer.writerow({'EAR': ear, 'PUC': puc, 'Time': time.perf_counter(), })
+        seconds = ticker()
 
+        writer.writerow({'EAR': ear, 'PUC': puc, 'TIME': seconds})
+
+        if seconds >= 60.00:
+            writer.writerow({'EAR': '', 'PUC': '', 'TIME': ''})
+
+
+def ticker():
+    global start_time
+
+    if start_time == 0:
+        start_time = time.time()
+
+    time_stop = time.time()
+    delta_time = round(time_stop - start_time, 2)
+
+    if delta_time >= 60.00:  # Если прошло 60 секунд, обнуляем секунды
+        start_time = 0
+
+    # print(f"Прошло {delta_time} сек.")
+    return delta_time
+
+
+# constants and variables
+start_time = 0  # Время начала работы
+curr_sec = 0  # Текущее значение секунд
 
 right_eye = [[33, 133], [160, 144], [159, 145], [158, 153]] # right eye landmark positions
 left_eye = [[263, 362], [387, 373], [386, 374], [385, 380]] # left eye landmark positions
@@ -227,13 +252,16 @@ face_mesh = mp_face_mesh.FaceMesh(
 mp_drawing = mp.solutions.drawing_utils 
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 
+# start calibrate
 print ('Starting calibration. Please be in neutral state')
 time.sleep(1)
 ears_norm, pucs_norm = calibrate()
 
+# start app
 print ('Starting main application')
 time.sleep(1)
 infer(ears_norm, pucs_norm)
 
+# close if break
 face_mesh.close()
 
