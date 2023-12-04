@@ -7,6 +7,7 @@ import os
 import time
 import torch
 
+
 def distance(p1, p2):
     ''' Calculate distance between two points
     :param p1: First Point 
@@ -14,6 +15,7 @@ def distance(p1, p2):
     :return: Euclidean distance between the points. (Using only the x and y coordinates).
     '''
     return (((p1[:2] - p2[:2])**2).sum())**0.5
+
 
 def eye_aspect_ratio(landmarks, eye):
     ''' Calculate the ratio of the eye length to eye width. 
@@ -27,6 +29,7 @@ def eye_aspect_ratio(landmarks, eye):
     D = distance(landmarks[eye[0][0]], landmarks[eye[0][1]])
     return (N1 + N2 + N3) / (3 * D)
 
+
 def eye_feature(landmarks):
     ''' Calculate the eye feature as the average of the eye aspect ratio for the two eyes
     :param landmarks: Face Landmarks returned from FaceMesh MediaPipe model
@@ -34,6 +37,7 @@ def eye_feature(landmarks):
     '''
     return (eye_aspect_ratio(landmarks, left_eye) + \
     eye_aspect_ratio(landmarks, right_eye))/2
+
 
 def pupil_circularity(landmarks, eye):
     ''' Calculate pupil circularity feature.
@@ -52,6 +56,7 @@ def pupil_circularity(landmarks, eye):
     area = math.pi * ((distance(landmarks[eye[1][0]], landmarks[eye[3][1]]) * 0.5) ** 2)
     return (4*math.pi*area)/(perimeter**2)
 
+
 def pupil_feature(landmarks):
     ''' Calculate the pupil feature as the average of the pupil circularity for the two eyes
     :param landmarks: Face Landmarks returned from FaceMesh MediaPipe model
@@ -59,6 +64,7 @@ def pupil_feature(landmarks):
     '''
     return (pupil_circularity(landmarks, left_eye) + \
         pupil_circularity(landmarks, right_eye))/2
+
 
 def run_face_mp(image):
     ''' Get face landmarks using the FaceMesh MediaPipe model. 
@@ -100,6 +106,7 @@ def run_face_mp(image):
 
     return ear, puc, image
 
+
 def calibrate(calib_frame_count=25):
     ''' Perform clibration. Get features for the neutral position.
     :param calib_frame_count: Image frames for which calibration is performed. Default Vale of 25.
@@ -136,6 +143,7 @@ def calibrate(calib_frame_count=25):
 
     return [ears.mean(), ears.std()], \
            [pucs.mean(), pucs.std()],
+
 
 def infer(ears_norm, pucs_norm):
     ''' Perform inference.
@@ -184,6 +192,8 @@ def infer(ears_norm, pucs_norm):
         cv2.putText(image, "PUC: %.2f" %(puc_main), (int(0.52*image.shape[1]), int(0.07*image.shape[0])),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
 
+        add_to_csv(ear_main,puc_main)
+
         cv2.imshow('MediaPipe FaceMesh', image)
         if cv2.waitKey(5) & 0xFF == ord("q"):
             break
@@ -193,12 +203,18 @@ def infer(ears_norm, pucs_norm):
     cv2.destroyAllWindows()
     cap.release()
 
-def add_to_csv(csv_file, pnum, ears, pucs):
-    data = [[pnum, row, ears[row],pucs[row]] \
-        for row in range(len(ears))]
-    with open(csv_file, 'a', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerows(data)
+
+def add_to_csv(ear, puc):
+    fieldnames = ['EAR', 'PUC', 'Time']
+    filename = 'data.csv'
+
+    with open(filename, mode='a', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames)
+
+        if file.tell() == 0:
+            writer.writeheader()
+
+        writer.writerow({'EAR': ear, 'PUC': puc, 'Time': time.perf_counter(), })
 
 
 right_eye = [[33, 133], [160, 144], [159, 145], [158, 153]] # right eye landmark positions
@@ -210,16 +226,6 @@ face_mesh = mp_face_mesh.FaceMesh(
     min_detection_confidence=0.3, min_tracking_confidence=0.8)
 mp_drawing = mp.solutions.drawing_utils 
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
-
-# csv write
-# Change to output csv file path
-data_csv = 'E:\data_new.csv'
-header = ['P_ID', 'Frame_Num', 'EAR', 'PUC']
-
-if not os.path.exists(data_csv):
-    with open(data_csv, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
 
 print ('Starting calibration. Please be in neutral state')
 time.sleep(1)
