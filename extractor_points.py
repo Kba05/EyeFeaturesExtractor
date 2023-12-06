@@ -2,10 +2,8 @@ import csv
 import cv2
 import mediapipe as mp
 import math
-import numpy as np 
-import os 
+import numpy as np
 import time
-import torch
 
 
 def distance(p1, p2):
@@ -67,7 +65,7 @@ def pupil_feature(landmarks):
 
 
 def run_face_mp(image):
-    ''' Get face landmarks using the FaceMesh MediaPipe model. 
+    ''' Get face landmarks using the FaceMesh MediaPipe model.
     Calculate facial features using the landmarks.
     :param image: Image for which to get the face landmarks
     :return: Feature 1 (Eye), Feature 2 (Mouth), Feature 3 (Pupil), \
@@ -123,7 +121,7 @@ def calibrate(calib_frame_count=50):
             print("Ignoring empty camera frame.")
             continue
 
-        ear,puc, image = run_face_mp(image)
+        ear, puc, image = run_face_mp(image)
         if ear != -1000:
             ears.append(ear)
             pucs.append(puc)
@@ -152,13 +150,14 @@ def infer(ears_norm, pucs_norm):
     '''
     ear_main = 0
     puc_main = 0
-    decay = 0.9 # use decay to smoothen the noise in feature values
+    decay = 0.9  # use decay to smoothen the noise in feature values
 
-    input_data = []
-    frame_before_run = 0
+    ear_arr_per_minute = []
+    puc_arr_per_minute = []
 
     cap = cv2.VideoCapture(0)
     while cap.isOpened():
+        seconds = ticker()
         success, image = cap.read()
         if not success:
             print("Ignoring empty camera frame.")
@@ -177,22 +176,23 @@ def infer(ears_norm, pucs_norm):
         else:
             ear_main = -1000
             puc_main = -1000
-        
-        if len(input_data) == 20:
-            input_data.pop(0)
-
-        input_data.append([ear_main, puc_main])
-
-        frame_before_run += 1
-        if frame_before_run >= 15 and len(input_data) == 20:
-            frame_before_run = 0
 
         cv2.putText(image, "EAR: %.2f" %(ear_main), (int(0.02*image.shape[1]), int(0.07*image.shape[0])),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
         cv2.putText(image, "PUC: %.2f" %(puc_main), (int(0.52*image.shape[1]), int(0.07*image.shape[0])),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
 
-        add_to_csv(ear_main,puc_main)
+        if seconds >= 60.00:
+            ear_average = cal_averages(ear_arr_per_minute)
+            puc_average = cal_averages(puc_arr_per_minute)
+            add_averages_to_csv(ear_average, puc_average)
+            ear_arr_per_minute = []
+            puc_arr_per_minute = []
+        else:
+            ear_arr_per_minute.append(ear_main)
+            puc_arr_per_minute.append(puc_main)
+
+        # add_to_csv(ear_main, puc_main)
 
         cv2.imshow('MediaPipe FaceMesh', image)
         if cv2.waitKey(5) & 0xFF == ord("q"):
@@ -204,6 +204,14 @@ def infer(ears_norm, pucs_norm):
     cap.release()
 
 
+# calculate averages
+def cal_averages(array):
+    average = sum(array) / len(array)
+    print(average)
+    return average
+
+
+# with time
 def add_to_csv(ear, puc):
     fieldnames = ['EAR', 'PUC', 'TIME']
     filename = 'data.csv'
@@ -222,6 +230,17 @@ def add_to_csv(ear, puc):
             writer.writerow({'EAR': '', 'PUC': '', 'TIME': ''})
 
 
+# with average values
+def add_averages_to_csv(a_ear, a_puc):
+    fieldnames = ['EAR', 'PUC', 'STATUS']
+    filename = 'data.csv'
+    with open(filename, mode='a', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames)
+        if file.tell() == 0:
+            writer.writeheader()
+        writer.writerow({'EAR': a_ear, 'PUC': a_puc, 'STATUS': 'Active'})
+
+
 def ticker():
     global start_time
 
@@ -234,7 +253,7 @@ def ticker():
     if delta_time >= 60.00:  # Если прошло 60 секунд, обнуляем секунды
         start_time = 0
 
-    # print(f"Прошло {delta_time} сек.")
+    print(f"Прошло {delta_time} сек.")
     return delta_time
 
 
@@ -253,12 +272,12 @@ mp_drawing = mp.solutions.drawing_utils
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 
 # start calibrate
-print ('Starting calibration. Please be in neutral state')
+print('Starting calibration. Please be in neutral state')
 time.sleep(1)
 ears_norm, pucs_norm = calibrate()
 
 # start app
-print ('Starting main application')
+print('Starting main application')
 time.sleep(1)
 infer(ears_norm, pucs_norm)
 
